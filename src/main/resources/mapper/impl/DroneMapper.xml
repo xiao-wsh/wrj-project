@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?> <!-- XML 声明：版本 1.0，编码 UTF-8 支持中文 -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 引用 MyBatis 3.0 的 DTD 文件，用于 XML 语法校验 -->
+<mapper namespace="com.md.basePlatform.mapper.api.DroneMapper"> <!-- namespace 必须与 Mapper 接口的全限定名一致，MyBatis 靠这个找到对应接口 -->
+
+    <resultMap id="DroneResultMap" type="com.md.basePlatform.domain.entity.Drone"> <!-- 定义列到属性的映射规则 -->
+        <id column="id" property="id"/>
+        <result column="drone_code" property="droneCode"/>
+        <result column="name" property="name"/>
+        <result column="model" property="model"/>
+        <result column="manufacturer" property="manufacturer"/>
+        <result column="max_payload" property="maxPayload"/>
+        <result column="endurance_minutes" property="enduranceMinutes"/>
+        <result column="cruise_speed" property="cruiseSpeed"/>
+        <result column="status" property="status"/>
+        <result column="ai_generated" property="aiGenerated"/>
+        <result column="deleted" property="deleted"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <!-- 数据库updated_at字段 映射到实体类updatedAt属性，记录数据最后更新时间 -->
+    </resultMap>
+
+    <!-- ==================== 1. 列表查询 ==================== -->
+    <!-- resultMap="DroneResultMap"：查询结果按上面定义的映射规则转换为 Drone 对象列表 -->
+    <select id="selectList" resultMap="DroneResultMap">
+         SELECT * FROM drone
+        WHERE deleted = 0
+        <if test="param1 != null and param1 != ''">
+            AND (
+                drone_code = #{param1} <!-- 精确匹配编码：如果用户输入的是精确的编码，直接等值匹配 -->
+                <choose> <!-- 多分支选择标签 -->
+                    <when test="_databaseId == 'mysql'">
+                        OR CAST(id AS CHAR) = #{param1}
+                    </when>
+                    <otherwise>
+                        OR CAST(id AS TEXT) = #{param1} <!-- SQLite 用 TEXT 类型转换 -->
+                    </otherwise>
+                </choose>
+                OR name LIKE #{param2} <!-- 名称模糊匹配：param2 包含 % 通配符时由 Java 层拼接 -->
+                OR model LIKE #{param2}
+                OR manufacturer LIKE #{param2}
+                OR status LIKE #{param2}
+            )
+        </if>
+        ORDER BY id DESC
+    </select>
+
+    <select id="selectById" resultMap="DroneResultMap">
+     SELECT * FROM drone WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- ==================== 3. 新增记录 ==================== -->
+    <!--
+      id="insert"：对应 insert(Drone drone) 方法
+      parameterType：参数类型（可省略，MyBatis 会自动推断）
+      useGeneratedKeys="true"：告诉 MyBatis 数据库会自动生成主键
+      keyProperty="id"：数据库生成的主键值回填到 Drone 对象的 id 属性中（插入后 drone.getId() 就能拿到新 ID）
+    -->
+    <insert id="insert" parameterType="com.md.basePlatform.domain.entity.Drone" useGeneratedKeys="true" keyProperty="id">
+    <!-- 插入语句：自增主键回填 -->
+        INSERT INTO drone (
+            drone_code, name, model, manufacturer, max_payload, endurance_minutes, cruise_speed, <!-- 基础信息列 -->
+            status, ai_generated, deleted, created_at, updated_at <!-- 状态和标记列 -->
+        ) VALUES ( <!-- VALUES 子句：对应上面列的值列表 -->
+            #{droneCode}, #{name}, #{model}, #{manufacturer}, #{maxPayload}, #{enduranceMinutes}, #{cruiseSpeed},
+            #{status}, #{aiGenerated}, #{deleted}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            <!-- CURRENT_TIMESTAMP 是数据库函数，获取当前时间 -->
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.md.basePlatform.domain.entity.Drone"> <!-- 更新语句 -->
+       UPDATE drone
+        SET drone_code = #{droneCode}, <!-- 更新编码 -->
+            name = #{name}, 
+            model = #{model},
+            manufacturer = #{manufacturer},
+            max_payload = #{maxPayload},
+            endurance_minutes = #{enduranceMinutes},
+            cruise_speed = #{cruiseSpeed},
+            status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- ==================== 5. 软删除 ==================== -->
+    <!--
+      id="softDeleteById"：对应 softDeleteById(Long id) 方法
+      逻辑：不执行 DELETE FROM，而是 UPDATE SET deleted = 1，将记录标记为已删除
+      优势：数据可恢复、可审计、不会因误删造成数据丢失
+    -->
+    <update id="softDeleteById"> <!-- 软删除：其实是更新 deleted 字段 -->
+     UPDATE drone
+        SET deleted = 1, updated_at = CURRENT_TIMESTAMP <!-- 标记为已删除（deleted=1），同时记录删除时间 -->
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+</mapper>

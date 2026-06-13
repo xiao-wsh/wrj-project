@@ -1,0 +1,22 @@
+# ===================== SQLite 环境配置（默认开发环境） =====================
+# 说明：当 spring.profiles.active=sqite 时，本文件的配置会覆盖主配置文件中的同名项
+# SQLite 是一个嵌入式文件数据库，无需安装数据库服务，数据存储在本地文件中
+
+# ---------- 数据源配置 ----------
+spring: # Spring 顶级节点
+  datasource: # 数据源配置（数据库连接相关）
+    type: com.alibaba.druid.pool.DruidDataSource # 指定使用阿里巴巴 Druid 连接池（比默认 HikariCP 多了监控功能）
+    driver-class-name: org.sqlite.JDBC # JDBC 驱动类名：告诉 Java 用哪个驱动来连接 SQLite 数据库
+    url: jdbc:sqlite:./data/drone.db?date_string_format=yyyy-MM-dd HH:mm:ss # 数据库连接地址：./data/drone.db 表示项目根目录下 data 文件夹中的文件
+    username: "" # SQLite 默认不需要用户名（空字符串表示无认证）
+    password: "" # SQLite 默认不需要密码（空字符串表示无认证）
+    initialization-mode: always # 每次启动都执行初始化脚本（schema.sql），开发阶段方便，生产应改为 never
+    schema: classpath:schema.sql # 指定建表 SQL 脚本的类路径位置，启动时自动执行
+    druid: # Druid 连接池专属配置
+      initial-size: 1 # 连接池启动时创建的初始连接数（SQLite 嵌入式单连接即可，设小一点）
+      max-active: 10 # 连接池中最大活跃连接数（SQLite 并发能力有限，不宜设太大）
+      min-idle: 1 # 连接池中最小空闲连接数（保持至少一个连接，避免频繁创建销毁）
+      validation-query: SELECT 1 # 连接有效性校验 SQL：定期执行此查询判断连接是否还活着
+      test-while-idle: true # 空闲时测试连接：连接池会定期对空闲连接执行 validation-query 检查有效性
+      test-on-borrow: false # 借出时不测试：从连接池获取连接时不校验，提升性能（生产通常关闭）
+      test-on-return: false # 归还时不测试：连接归还到池中时不校验，同样为性能考虑
