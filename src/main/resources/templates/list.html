@@ -1,0 +1,87 @@
+<!DOCTYPE html> <!-- HTML5 文档类型声明，告诉浏览器用标准模式解析 -->
+<!-- 无人机列表页：查询、分页无关列表展示、跳转新增/编辑/删除 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"> <!-- 页面语言为中文；xmlns:th 声明 Thymeleaf 命名空间 -->
+<head> <!-- head 区域：页面元数据和外部资源引用 -->
+    <meta charset="UTF-8"> <!-- 字符编码 UTF-8，确保中文正常显示 -->
+    <title>无人机管理</title> <!-- 浏览器标签页标题 -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css"> <!-- 引入 Bootstrap CSS（国内 CDN 源） -->
+</head> <!-- head 结束 -->
+<body> <!-- 页面可见内容 -->
+<div class="container"> <!-- Bootstrap 响应式容器，页面内容居中 -->
+    <h3>无人机管理</h3> <!-- 页面主标题 -->
+    <!-- 查询表单：keyword 会作为请求参数传给 /drones -->
+    <form class="form-inline" method="get" th:action="@{/drones}"> <!-- 行内表单：输入框和按钮在同一行；th:action 动态生成 /drones 路径 -->
+        <div class="form-group"> <!-- 表单组：包裹输入框 -->
+            <input class="form-control" type="text" name="keyword" placeholder="名称/型号/厂商/状态" th:value="${keyword}"> <!-- 搜索输入框：placeholder 提示文字；th:value 回显上次搜索词 -->
+        </div> <!-- 表单组结束 -->
+        <button class="btn btn-primary" type="submit">查询</button> <!-- 提交按钮：点击以 GET 方式提交表单 -->
+        <a class="btn btn-success" th:href="@{/drones/new}">新增无人机</a> <!-- 绿色按钮，跳转到新增页面 -->
+    </form> <!-- 查询表单结束 -->
+    <hr/> <!-- 水平分割线 -->
+
+    <!-- 查询反馈区：告诉用户当前筛选词和结果数量 -->
+    <div class="alert alert-info" style="padding: 8px 12px;"> <!-- alert-info：浅蓝色信息提示框；内联样式缩减内边距 -->
+        <span>当前关键词：</span> <!-- 文字标签 -->
+        <strong th:text="${keyword == null || #strings.isEmpty(keyword)} ? '（空）' : keyword">（空）</strong> <!-- 关键词为空时显示（空），否则显示关键词本身 -->
+        <span style="margin-left: 16px;">结果数：</span> <!-- 左侧留间距分隔 -->
+        <strong th:text="${#lists.size(drones)}">0</strong> <!-- Thymeleaf 工具方法 #lists.size() 统计列表元素个数 -->
+    </div> <!-- 反馈区结束 -->
+
+    <!--
+      数据表格：
+      th:with="showDetail=..." 定义局部变量 showDetail
+      showDetail 为 true 的条件：keyword 不为 null 且不为空字符串
+      即：用户搜索时才展示详细列，默认仅显示核心列（简化视图）
+    -->
+    <!-- table-striped 斑马纹；table-bordered 带边框 -->
+    <table class="table table-striped table-bordered"
+           th:with="showDetail=${keyword != null and !#strings.isEmpty(keyword)}"> <!-- 定义 showDetail 局部变量，控制列显隐 -->
+        <!-- showDetail=true 时显示更多明细列；否则只显示核心列 -->
+        <thead> <!-- 表头区域 -->
+        <tr> <!-- 表头行 -->
+            <th>名称</th> <!-- 名称列表头 -->
+            <th>型号</th> <!-- 型号列表头 -->
+            <th>厂商</th> <!-- 厂商列表头 -->
+            <th th:if="${showDetail}">最大载重(kg)</th> <!-- 仅搜索态显示：载重列 -->
+            <th th:if="${showDetail}">续航(分钟)</th> <!-- 仅搜索态显示：续航列 -->
+            <th th:if="${showDetail}">巡航速度(km/h)</th> <!-- 仅搜索态显示：速度列 -->
+            <th>状态</th> <!-- 状态列表头 -->
+            <th th:if="${showDetail}">AI生成</th> <!-- 仅搜索态显示：AI 标记列 -->
+            <th th:if="${showDetail}">创建时间</th> <!-- 仅搜索态显示：创建时间列 -->
+            <th th:if="${showDetail}">更新时间</th> <!-- 仅搜索态显示：更新时间列 -->
+            <th>操作</th> <!-- 操作列（编辑/删除按钮） -->
+        </tr> <!-- 表头行结束 -->
+        </thead> <!-- 表头结束 -->
+        <tbody> <!-- 表体：实际数据行会在这里渲染 -->
+        <!--
+          th:each="item : ${drones}"：遍历后端传入的 drones 列表
+          每次迭代中 item 代表当前行的 Drone 对象
+        -->
+        <tr th:each="item : ${drones}"> <!-- 循环生成数据行，每行一条无人机记录 -->
+            <td th:text="${item.name}">巡检机</td> <!-- 显示名称，静态文本"巡检机"是预览占位 -->
+            <td th:text="${item.model}">Survey-X</td> <!-- 显示型号 -->
+            <td th:text="${item.manufacturer}">ACME</td> <!-- 显示厂商 -->
+            <td th:if="${showDetail}" th:text="${item.maxPayload}">5</td> <!-- 条件显示载重 -->
+            <td th:if="${showDetail}" th:text="${item.enduranceMinutes}">30</td> <!-- 条件显示续航 -->
+            <td th:if="${showDetail}" th:text="${item.cruiseSpeed}">60</td> <!-- 条件显示速度 -->
+            <td th:text="${item.status}">READY</td> <!-- 显示状态 -->
+            <td th:if="${showDetail}" th:text="${item.aiGenerated == 1} ? '是' : '否'">否</td> <!-- aiGenerated=1 显示"是"，否则"否" -->
+            <td th:if="${showDetail}" th:text="${item.createdAt}">2026-04-28 23:00:00</td> <!-- 显示创建时间 -->
+            <td th:if="${showDetail}" th:text="${item.updatedAt}">2026-04-28 23:00:00</td> <!-- 显示更新时间 -->
+            <td> <!-- 操作列 -->
+                <a class="btn btn-xs btn-info" th:href="@{'/drones/' + ${item.id} + '/edit'}">编辑</a> <!-- 编辑按钮：拼接 /drones/{id}/edit 路径 -->
+                <!-- 删除使用 a 标签触发 GET 接口；onclick 弹确认框，点取消则 return false 阻止跳转 -->
+                <a class="btn btn-xs btn-danger" onclick="return confirm('确定删除？')" th:href="@{'/drones/del/' + ${item.id}}">删除</a> <!-- 删除链接：拼接 /drones/del/{id} 触发软删除 -->
+            </td> <!-- 操作列结束 -->
+        </tr> <!-- 数据行结束 -->
+        <!-- 没有数据时显示提示行，避免表格空白 -->
+        <tr th:if="${#lists.isEmpty(drones)}"> <!-- 列表为空时显示此提示行 -->
+            <!-- colspan 合并单元格；搜索态合并 11 列（所有列），默认态合并 5 列（核心列） -->
+            <td th:if="${showDetail}" colspan="11" class="text-center text-muted">没有匹配数据</td> <!-- 搜索态提示 -->
+            <td th:unless="${showDetail}" colspan="5" class="text-center text-muted">没有匹配数据</td> <!-- 默认态提示；th:unless 相当于 if not -->
+        </tr> <!-- 空提示行结束 -->
+        </tbody> <!-- 表体结束 -->
+    </table> <!-- 表格结束 -->
+</div> <!-- 容器结束 -->
+</body> <!-- body 结束 -->
+</html> <!-- html 结束 -->

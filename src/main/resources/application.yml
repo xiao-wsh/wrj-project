@@ -1,0 +1,27 @@
+# ===================== Spring Boot 主配置文件 =====================
+# 作用：定义公共配置项（应用名、激活哪个环境、模板引擎、MyBatis、服务端口）
+# 说明：本文件是 Spring Boot 自动加载的默认配置，所有 profile 都会读取
+
+# ---------- Spring 框架核心配置 ----------
+spring: # Spring 顶级配置节点
+  application: # 应用信息配置
+    name: basePlatform # 应用名称，用于日志、监控、注册中心等场景标识
+  profiles: # 环境切换配置
+    active: sqlite # 默认激活 sqlite 环境（会同时加载 application-sqlite.yml 中的配置）
+  thymeleaf: # Thymeleaf 模板引擎配置
+    cache: false # 开发时关闭模板缓存，修改 HTML 后刷新浏览器即可看到效果（生产应设为 true）
+  mvc: # Spring MVC 配置
+    hiddenmethod: # 隐藏 HTTP 方法过滤器配置（支持 PUT/DELETE 等 REST 方法）
+      filter: # 过滤器子配置
+        enabled: true # 启用 HiddenHttpMethodFilter，允许表单通过 _method 参数模拟 PUT/DELETE 请求
+
+# ---------- MyBatis 持久层框架配置 ----------
+mybatis: # MyBatis 顶级配置节点
+  mapper-locations: classpath:mapper/**/*.xml # 指定 Mapper XML 文件的扫描路径（** 表示递归所有子目录）
+  type-aliases-package: com.md.basePlatform.domain.entity # 实体类别名包：XML 中可直接写类名而不用全限定名
+  configuration: # MyBatis 核心配置
+    map-underscore-to-camel-case: true # 开启驼峰映射：数据库字段 drone_code 自动映射到 Java 属性 droneCode
+
+# ---------- 内嵌 Tomcat 服务器配置 ----------
+server: # 服务器配置节点
+  port: 8080 # 服务监听端口，启动后通过 http://localhost:8080访问

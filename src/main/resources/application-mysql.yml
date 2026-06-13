@@ -1,0 +1,23 @@
+# ===================== MySQL 环境配置（生产或需多用户并发时使用） =====================
+# 说明：激活方式：启动时加 --spring.profiles.active=mysql，或修改主配置中的 spring.profiles.active 值
+# 前置条件：需要本地或远程安装 MySQL 数据库服务，并提前创建好 baseplatform 数据库
+# 安全提醒：生产环境请通过环境变量 MYSQL_USERNAME / MYSQL_PASSWORD 覆盖默认账号密码
+
+# ---------- 数据源配置 ----------
+spring: # Spring 顶级节点
+  datasource: # 数据源配置（数据库连接相关）
+    type: com.alibaba.druid.pool.DruidDataSource # 使用阿里巴巴 Druid 连接池，提供 SQL 监控和防火墙功能
+    driver-class-name: com.mysql.cj.jdbc.Driver # MySQL 8.x 的 JDBC 驱动类（cj 代表 Connector/J 新版驱动）
+    url: jdbc:mysql://127.0.0.1:3306/baseplatform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai # JDBC 连接串：连本机 3306 端口的 baseplatform 库，指定编码与时区
+    username: ${MYSQL_USERNAME:root} # 数据库用户名：优先读取环境变量 MYSQL_USERNAME，没设则用默认值 root
+    password: ${MYSQL_PASSWORD:root} # 数据库密码：优先读取环境变量 MYSQL_PASSWORD，没设则用默认值 root（生产务必用环境变量覆盖！）
+    initialization-mode: always # 每次启动都执行 schema-mysql.sql 中的建表语句
+    schema: classpath:schema-mysql.sql # MySQL 版本的建表脚本类路径（与 SQLite 不同，类型有差异）
+    druid: # Druid 连接池专属配置
+      initial-size: 1 # 启动时初始连接数（MySQL 支持较大并发，可以设高，这里保守设 1）
+      max-active: 20 # 最大活跃连接数（MySQL 比 SQLite 并发能力强，这里设 20）
+      min-idle: 1 # 最小空闲连接数，保持至少 1 个连接随时待命
+      validation-query: SELECT 1 # 连接校验 SQL：MySQL 中用 SELECT 1 测试连接是否存活
+      test-while-idle: true # 空闲连接检测开启：自动回收失效连接，防止取到"死连接"报错
+      test-on-borrow: false # 借出时不校验：省去每次获取连接的性能开销
+      test-on-return: false # 归还时不校验：归还连接的性能优化

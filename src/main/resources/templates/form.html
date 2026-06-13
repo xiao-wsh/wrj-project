@@ -1,0 +1,124 @@
+<!DOCTYPE html> <!-- HTML5 文档类型声明：告诉浏览器这是标准的 HTML5 页面 -->
+<!-- 无人机新增/编辑表单：通过 fetch 提交 JSON，并支持「AI 生成」填充性能字段 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"> <!-- lang: 页面语言中文；xmlns:th: 声明 Thymeleaf 命名空间，th:* 属性才能生效 -->
+<head> <!-- 页面元数据区域：设置编码、标题、引入外部资源 -->
+    <meta charset="UTF-8"> <!-- 声明字符编码为 UTF-8，支持中英文和特殊符号 -->
+    <title>无人机表单</title> <!-- 浏览器标签页标题 -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css"> <!-- 引入 Bootstrap CSS 样式库（国内 CDN） -->
+</head> <!-- head 结束 -->
+<body> <!-- 页面可见内容开始 -->
+<div class="container"> <!-- Bootstrap 容器：限制宽度并居中，两侧自动留白 -->
+    <!--
+      th:text 动态标题：如果 drone.id 为 null（新增模式），显示"新增无人机"；否则显示"编辑无人机"
+      中间的"新增无人机"是静态占位文本，浏览器直接打开 HTML 时显示，Thymeleaf 渲染后会被替换
+    -->
+    <h3 th:text="${drone.id == null ? '新增无人机' : '编辑无人机'}">新增无人机</h3> <!-- 动态标题：三元表达式必须全部在 ${} 内 -->
+    <!-- 表单不直接 submit，而是由下面 JS 用 fetch 提交 JSON -->
+    <form id="droneForm"> <!-- form 标签：id 用于 JS 获取 DOM 引用，没有 action 和 method 因为用 JS 提交 -->
+        <div class="form-group"> <!-- Bootstrap 表单组：包含 label + input，提供上下间距 -->
+            <label>名称</label> <!-- label 标签：输入框前的文字说明 -->
+            <input class="form-control" name="name" th:value="${drone.name}" required> <!-- Bootstrap 输入框；th:value 回显后端传过来的值；required 前端非空校验 -->
+        </div> <!-- 名称字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>型号</label> <!-- 型号标签 -->
+            <input class="form-control" id="model" name="model" th:value="${drone.model}" required> <!-- id="model" 供 JS 的 aiGenerate 函数读取 -->
+        </div> <!-- 型号字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>厂商</label> <!-- 厂商标签 -->
+            <input class="form-control" name="manufacturer" th:value="${drone.manufacturer}"> <!-- 厂商为选填，没有 required 属性 -->
+        </div> <!-- 厂商字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>最大载重(kg)</label> <!-- 载重标签 -->
+            <input class="form-control" id="maxPayload" type="number" name="maxPayload" th:value="${drone.maxPayload}"> <!-- type="number" 限制只能输入数字；id 供 AI 回填 -->
+        </div> <!-- 载重字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>续航(分钟)</label> <!-- 续航标签 -->
+            <input class="form-control" id="enduranceMinutes" type="number" name="enduranceMinutes" th:value="${drone.enduranceMinutes}"> <!-- 数字输入框；id 供 AI 回填 -->
+        </div> <!-- 续航字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>巡航速度(km/h)</label> <!-- 速度标签 -->
+            <input class="form-control" id="cruiseSpeed" type="number" name="cruiseSpeed" th:value="${drone.cruiseSpeed}"> <!-- 数字输入框；id 供 AI 回填 -->
+        </div> <!-- 速度字段组结束 -->
+        <div class="form-group"> <!-- 表单组 -->
+            <label>状态</label> <!-- 状态标签 -->
+            <input class="form-control" name="status" th:value="${drone.status}"> <!-- 状态输入框，如 READY、MAINTENANCE 等 -->
+        </div> <!-- 状态字段组结束 -->
+        <!-- 操作按钮区域 -->
+        <button class="btn btn-default" type="button" onclick="aiGenerate()">AI生成属性</button> <!-- type="button" 防止触发表单提交；onclick 调用 JS 的 aiGenerate 函数 -->
+        <!-- 提交按钮：th:text 根据新增/编辑模式显示"创建"或"保存" -->
+        <button class="btn btn-primary" type="button" onclick="submitForm()" th:text="${drone.id == null ? '创建' : '保存'}">创建</button> <!-- 三元表达式全部在 ${} 内 -->
+        <a class="btn btn-link" th:href="@{/drones}">返回列表</a> <!-- th:href 生成 /drones 链接；btn-link 是文字链接样式 -->
+    </form> <!-- 表单结束 -->
+</div> <!-- 容器结束 -->
+
+<!--
+  JavaScript 区域：th:inline="javascript" 开启 Thymeleaf 内联，允许在 JS 中用 [[...]] 输出后端变量
+  核心逻辑：
+  1. getBody() —— 从表单字段收集数据组装 JSON 对象
+  2. submitForm() —— 用 fetch 发送 POST/PUT JSON 请求
+  3. aiGenerate() —— 调后端 AI 接口获取性能建议值回填表单
+-->
+<script th:inline="javascript"> <!-- Thymeleaf 内联 JS：允许在 JS 代码块中使用 /*[[...]]*/ 表达式 -->
+    // drone.id：由 Thymeleaf 内联；null 表示新增，有值表示编辑
+    var id = /*[[${drone.id}]]*/ null; // 后端注入当前记录主键（新增页为 null）；/*[[...]]*/ 是 Thymeleaf 内联语法，静态默认值是 null
+    var attributesFromAi = false; // 标记本次保存前是否点过「AI 生成」，随 JSON 提交给服务端
+
+    // getBody 函数：将页面表单字段组装为与 DroneRequest 对齐的 plain object
+    function getBody() { // 将页面表单字段组装为与 DroneRequest 对齐的 plain object
+        var form = document.getElementById("droneForm"); // 取得表单 DOM 节点引用
+        return { // 构造字面量对象作为 fetch body
+            name: form.name.value, // 名称：来自 name 输入框
+            model: form.model.value, // 型号：来自 model 输入框
+            manufacturer: form.manufacturer.value, // 厂商：可空字符串
+            maxPayload: form.maxPayload.value ? parseInt(form.maxPayload.value) : null, // 有值则转 int，否则传 null
+            enduranceMinutes: form.enduranceMinutes.value ? parseInt(form.enduranceMinutes.value) : null, // 续航同理
+            cruiseSpeed: form.cruiseSpeed.value ? parseInt(form.cruiseSpeed.value) : null, // 速度同理
+            status: form.status.value, // 状态字符串
+            attributesFromAi: attributesFromAi // 布尔标记：是否 AI 回填过性能字段
+        }; // 结束对象字面量
+    } // getBody 结束
+
+    // submitForm 函数：「创建/保存」按钮点击触发，通过 fetch API 发送 JSON 到后端 REST 接口
+    function submitForm() { // 新增时 POST /drones，编辑时 PUT /drones/{id}
+        var method = id == null ? "POST" : "PUT"; // 无 id 用 POST 新增；否则 PUT 更新
+        var url = id == null ? "/drones" : "/drones/" + id; // 新增走集合 URL；更新走带 id 子路径
+        fetch(url, { // 浏览器原生异步请求 API，返回 Promise
+            method: method, // 动态 HTTP 方法（POST 或 PUT）
+            headers: {"Content-Type": "application/json"}, // 声明 JSON 请求体
+            body: JSON.stringify(getBody()) // 序列化对象字符串作为 body
+        }).then(function (resp) { // 第一步：拿到 Response 对象
+            return resp.json(); // 解析 JSON 为 Promise
+        }).then(function (res) { // 第二步：得到 ApiResponse 结构
+            if (!res || res.code !== 200) { // 判空或业务码非 200 视为失败
+                throw new Error((res && res.message) ? res.message : "保存失败"); // 抛出带服务端 message 的错误
+            } // if 结束
+            location.href = "/drones"; // 成功后跳转列表页，触发整页刷新
+        }).catch(function (e) { // 任意一步异常进入 catch
+            alert(e.message); // 弹窗提示用户失败原因
+        }); // fetch 链结束
+    } // submitForm 结束
+
+    // aiGenerate 函数：「AI 生成属性」按钮点击触发，调后端接口获取性能建议值回填表单
+    function aiGenerate() { // 只依赖型号字段调用后端 GET /drones/ai/generate 接口
+        var modelVal = document.getElementById("model").value; // 读取型号输入框当前文本
+        if (!modelVal) { // 型号为空则无法生成
+            alert("请先输入型号"); // 友好提示
+            return; // 终止后续请求
+        } // if 结束
+        fetch("/drones/ai/generate?model=" + encodeURIComponent(modelVal) + "&usageLevel=normal") // 拼装查询串并编码型号
+            .then(function (resp) { return resp.json(); }) // 解析 JSON 响应
+            .then(function (res) { // 处理 ApiResponse<Drone>
+                if (!res || res.code !== 200 || !res.data) { // 校验响应结构与业务码及 data 存在性
+                    throw new Error((res && res.message) ? res.message : "AI生成失败"); // 失败抛错
+                } // if 结束
+                document.getElementById("maxPayload").value = res.data.maxPayload || ""; // 回填载重输入框
+                document.getElementById("enduranceMinutes").value = res.data.enduranceMinutes || ""; // 回填续航
+                document.getElementById("cruiseSpeed").value = res.data.cruiseSpeed || ""; // 回填速度
+                attributesFromAi = true; // 置位：后续保存时告知服务端属性来自 AI
+            }).catch(function (e) { // 网络或业务失败
+                alert(e.message); // 弹窗错误
+            }); // fetch 链结束
+    } // aiGenerate 结束
+</script> <!-- script 标签结束 -->
+</body> <!-- body 标签结束 -->
+</html> <!-- html 根标签结束 -->
